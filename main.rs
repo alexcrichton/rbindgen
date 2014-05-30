@@ -81,9 +81,16 @@ fn main() {
     };
     visit::walk_crate(&mut (&mut v, &mut out as &mut Writer), &krate, ());
 
-    println!(r"\#include <stdint.h>");
-    println!(r"\#include <stdbool.h>");
-    println!("");
+    println!(r"
+\#include <stdint.h>
+\#include <stdbool.h>
+
+typedef struct RustString \{
+    char *data;
+    unsigned long len;
+\} RustString;
+");
+
     for did in v.types_needed.borrow().iter() {
         v.print_type(*did);
     }
@@ -166,7 +173,7 @@ impl<'a> fmt::Show for CType<'a, ast::UintTy> {
             ast::TyU16 => "unsigned short",
             ast::TyU32 => "unsigned",
             ast::TyU64 => "uint64_t",
-            ast::TyU => "long unsigned",
+            ast::TyU => "unsigned long",
         })
     }
 }
@@ -202,11 +209,15 @@ impl<'a> fmt::Show for CType<'a, ty::t> {
                     _ => write!(f, "{}*", CType(&t, v)),
                 }
             }
-            ty::ty_enum(did, _) |
             ty::ty_struct(did, _) => {
-                write!(f, "{}", v.path_name(did))
+                match v.types_needed.try_borrow_mut() {
+                    Some(mut set) => { set.insert(did); }
+                    None => {}
+                }
+                write!(f, "struct {}", v.path_name(did))
             }
 
+            ty::ty_enum(..) |
             ty::ty_vec(..) |
             ty::ty_bare_fn(..) |
             ty::ty_closure(..) |
